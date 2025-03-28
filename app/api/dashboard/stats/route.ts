@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/route';
+import { authOptions } from '@/app/api/auth/[...nextauth]/auth.config';
 import prisma from '@/lib/prisma';
 
 export async function GET() {
@@ -53,8 +53,8 @@ export async function GET() {
       where: {
         workspaceId,
         status: 'COMPLETED',
-        completedAt: { not: null },
-        createdAt: { not: null }
+        completedAt: { not: undefined },
+        createdAt: { not: undefined }
       },
       select: {
         createdAt: true,
@@ -64,8 +64,8 @@ export async function GET() {
 
     let averageTime = 0;
     if (tasks.length > 0) {
-      const totalHours = tasks.reduce((acc: number, task: { completedAt: Date | null; createdAt: Date | null }) => {
-        if (task.completedAt && task.createdAt) {
+      const totalHours = tasks.reduce((acc: number, task: { completedAt: Date | null; createdAt: Date }) => {
+        if (task.completedAt) {
           const hours = (task.completedAt.getTime() - task.createdAt.getTime()) / (1000 * 60 * 60);
           return acc + hours;
         }

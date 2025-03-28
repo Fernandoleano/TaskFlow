@@ -48,8 +48,8 @@ model User {
   updatedAt     DateTime  @updatedAt
   accounts      Account[]
   sessions      Session[]
+  workspaces    Workspace[]
   tasks         Task[]
-  boards        Board[]
 }
 
 model VerificationToken {
@@ -60,28 +60,27 @@ model VerificationToken {
   @@unique([identifier, token])
 }
 
-model Task {
-  id          String   @id @default(cuid())
-  title       String
-  description String?
-  status      String   @default("TODO")
-  priority    String   @default("MEDIUM")
-  dueDate     DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  userId      String
-  boardId     String?
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  board       Board?   @relation(fields: [boardId], references: [id])
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  users     User[]
+  tasks     Task[]
 }
 
-model Board {
-  id          String   @id @default(cuid())
+model Task {
+  id          String    @id @default(cuid())
   title       String
   description String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  status      String    @default("TODO")
+  priority    String   @default("MEDIUM")
+  dueDate     DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  completedAt DateTime?
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  user        User      @relation(fields: [userId], references: [id])
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasks       Task[]
 } 
