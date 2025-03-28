@@ -38,18 +38,20 @@ model Session {
 }
 
 model User {
-  id            String    @id @default(cuid())
+  id            String     @id @default(cuid())
   name          String?
-  email         String?   @unique
+  email         String?    @unique
   emailVerified DateTime?
   image         String?
   password      String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
   accounts      Account[]
   sessions      Session[]
   workspaces    Workspace[]
   tasks         Task[]
+  activities    Activity[]
+  boards        Board[]
 }
 
 model VerificationToken {
@@ -69,6 +71,16 @@ model Workspace {
   tasks     Task[]
 }
 
+model Board {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  users       User[]
+  tasks       Task[]
+}
+
 model Task {
   id          String    @id @default(cuid())
   title       String
@@ -81,6 +93,17 @@ model Task {
   completedAt DateTime?
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String
+  board       Board?    @relation(fields: [boardId], references: [id], onDelete: SetNull)
+  boardId     String?
   user        User      @relation(fields: [userId], references: [id])
+  userId      String
+}
+
+model Activity {
+  id          String   @id @default(cuid())
+  type        String
+  description String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
   userId      String
 } 
