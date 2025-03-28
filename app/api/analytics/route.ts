@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth.config';
+import { authOptions } from '../auth/[...nextauth]/auth.config';
 import prisma from '@/lib/prisma';
+
+export const dynamic = 'force-dynamic';
 
 export async function GET() {
   try {
@@ -22,11 +24,11 @@ export async function GET() {
 
     const workspaceId = user.workspaces[0].id;
 
-    // Get tasks for the last 6 months
+    // Get user's tasks for the last 6 months
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
-    const monthlyTasks = await prisma.task.findMany({
+    const tasks = await prisma.task.findMany({
       where: {
         workspaceId,
         createdAt: {
@@ -34,52 +36,32 @@ export async function GET() {
         }
       },
       select: {
+        id: true,
+        title: true,
+        status: true,
         createdAt: true,
-        status: true
-      }
-    });
-
-    // Process monthly stats
-    const monthlyStats = processMonthlyStats(monthlyTasks);
-
-    // Get weekly tasks
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
-    const weeklyTasks = await prisma.task.findMany({
-      where: {
-        workspaceId,
-        createdAt: {
-          gte: weekAgo
-        }
+        completedAt: true
       },
-      select: {
-        createdAt: true,
-        status: true
+      orderBy: {
+        createdAt: 'asc'
       }
     });
 
-    // Process weekly stats
-    const weeklyStats = processWeeklyStats(weeklyTasks);
-
-    // Get task distribution
-    const taskDistribution = await getTaskDistribution(workspaceId);
-
-    // Calculate metrics
-    const metrics = await calculateMetrics(workspaceId);
+    // Process data for charts
+    const monthlyStats = processMonthlyStats(tasks);
+    const weeklyStats = processWeeklyStats(tasks);
+    const taskDistribution = processTaskDistribution(tasks);
+    const keyMetrics = calculateKeyMetrics(tasks);
 
     return NextResponse.json({
       monthlyStats,
       weeklyStats,
       taskDistribution,
-      metrics
+      keyMetrics
     });
   } catch (error) {
     console.error('Error fetching analytics:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
 
@@ -129,13 +111,13 @@ function processWeeklyStats(tasks: any[]) {
   };
 }
 
-async function getTaskDistribution(workspaceId: string) {
+async function processTaskDistribution(tasks: any[]) {
   const statuses = ['TODO', 'IN_PROGRESS', 'COMPLETED'];
   const counts = await Promise.all(
     statuses.map(status =>
       prisma.task.count({
         where: {
-          workspaceId,
+          workspaceId: tasks[0].workspaceId,
           status
         }
       })
@@ -148,16 +130,16 @@ async function getTaskDistribution(workspaceId: string) {
   };
 }
 
-async function calculateMetrics(workspaceId: string) {
+async function calculateKeyMetrics(tasks: any[]) {
   // Get total tasks
   const totalTasks = await prisma.task.count({
-    where: { workspaceId }
+    where: { workspaceId: tasks[0].workspaceId }
   });
 
   // Get completed tasks
   const completedTasks = await prisma.task.count({
     where: {
-      workspaceId,
+      workspaceId: tasks[0].workspaceId,
       status: 'COMPLETED'
     }
   });
@@ -170,7 +152,7 @@ async function calculateMetrics(workspaceId: string) {
   weekAgo.setDate(weekAgo.getDate() - 7);
   const recentCompletedTasks = await prisma.task.count({
     where: {
-      workspaceId,
+      workspaceId: tasks[0].workspaceId,
       status: 'COMPLETED',
       completedAt: {
         gte: weekAgo
@@ -182,7 +164,7 @@ async function calculateMetrics(workspaceId: string) {
   // Calculate project progress (assuming each task has equal weight)
   const inProgressTasks = await prisma.task.count({
     where: {
-      workspaceId,
+      workspaceId: tasks[0].workspaceId,
       status: 'IN_PROGRESS'
     }
   });
