@@ -1,92 +1,55 @@
 import { NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/api/auth/[...nextauth]/auth.config';
+import { authOptions } from '../../auth/[...nextauth]/auth.config';
 import prisma from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
-    // Get the session
     const session = await getServerSession(authOptions);
     if (!session?.user?.email) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's workspace ID
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { workspaces: true }
-    });
-
-    if (!user?.workspaces[0]?.id) {
-      return NextResponse.json({ error: 'No workspace found' }, { status: 404 });
-    }
-
-    const workspaceId = user.workspaces[0].id;
-
-    // Get total tasks
-    const totalTasks = await prisma.task.count({
-      where: { workspaceId }
-    });
-
-    // Get team members count
-    const teamMembers = await prisma.user.count({
-      where: {
-        workspaces: {
-          some: { id: workspaceId }
-        }
-      }
-    });
-
-    // Get completed tasks for completion rate
-    const completedTasks = await prisma.task.count({
-      where: {
-        workspaceId,
-        status: 'COMPLETED'
-      }
-    });
-
-    // Calculate completion rate
-    const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
-
-    // Get average time per task (in hours)
+    // Get user's tasks
     const tasks = await prisma.task.findMany({
       where: {
-        workspaceId,
-        status: 'COMPLETED',
-        completedAt: { not: undefined },
-        createdAt: { not: undefined }
+        user: {
+          email: session.user.email
+        }
       },
       select: {
+        id: true,
+        title: true,
+        status: true,
         createdAt: true,
         completedAt: true
       }
     });
 
-    let averageTime = 0;
-    if (tasks.length > 0) {
-      const totalHours = tasks.reduce((acc: number, task: { completedAt: Date | null; createdAt: Date }) => {
-        if (task.completedAt) {
-          const hours = (task.completedAt.getTime() - task.createdAt.getTime()) / (1000 * 60 * 60);
-          return acc + hours;
-        }
-        return acc;
-      }, 0);
-      averageTime = totalHours / tasks.length;
-    }
+    // Calculate stats
+    const totalTasks = tasks.length;
+    const completedTasks = tasks.filter(task => task.status === 'COMPLETED').length;
+    const inProgressTasks = tasks.filter(task => task.status === 'IN_PROGRESS').length;
+    const todoTasks = tasks.filter(task => task.status === 'TODO').length;
+
+    const completionRate = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
+    const productivityRate = totalTasks > 0 ? ((completedTasks + inProgressTasks) / totalTasks) * 100 : 0;
+    const projectProgress = totalTasks > 0 ? (completedTasks / totalTasks) * 100 : 0;
 
     return NextResponse.json({
       totalTasks,
-      teamMembers,
+      completedTasks,
+      inProgressTasks,
+      todoTasks,
       completionRate,
-      averageTime
+      productivityRate,
+      projectProgress
     });
   } catch (error) {
     console.error('Error fetching dashboard stats:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 } 

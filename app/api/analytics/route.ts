@@ -4,6 +4,7 @@ import { authOptions } from '../auth/[...nextauth]/auth.config';
 import prisma from '@/lib/prisma';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -12,25 +13,15 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    // Get user's workspace ID
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-      include: { workspaces: true }
-    });
-
-    if (!user?.workspaces[0]?.id) {
-      return NextResponse.json({ error: 'No workspace found' }, { status: 404 });
-    }
-
-    const workspaceId = user.workspaces[0].id;
-
     // Get user's tasks for the last 6 months
     const sixMonthsAgo = new Date();
     sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
     const tasks = await prisma.task.findMany({
       where: {
-        workspaceId,
+        user: {
+          email: session.user.email
+        },
         createdAt: {
           gte: sixMonthsAgo
         }
